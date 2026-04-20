@@ -19,6 +19,7 @@ results/
 !README_Project.md
 
 # Misc
+.claude/
 .env
 *.log
 *.csv
