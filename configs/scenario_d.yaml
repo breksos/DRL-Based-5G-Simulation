@@ -1,0 +1,17 @@
+# Scenario SCENARIO_D: n_ue=20, n_rb=50
+n_ue: 20
+n_rb: 50
+cell_radius: 500.0
+alpha: 0.5
+beta: 0.5
+lr: 0.0005
+gamma: 0.99
+epsilon_start: 1.0
+epsilon_end: 0.01
+epsilon_decay_steps: 50000
+buffer_size: 100000
+batch_size: 64
+target_update_freq: 1000
+hidden_size: 256
+n_episodes: 5000
+max_steps: 200

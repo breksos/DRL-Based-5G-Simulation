@@ -1,0 +1,16 @@
+alpha: 0.5
+batch_size: 64
+beta: 0.5
+buffer_size: 100000
+cell_radius: 120.0
+epsilon_decay_steps: 50000
+epsilon_end: 0.01
+epsilon_start: 1.0
+gamma: 0.99
+hidden_size: 256
+lr: 0.0005
+max_steps: 200
+n_episodes: 2000
+n_rb: 50
+n_ue: 10
+target_update_freq: 1000
