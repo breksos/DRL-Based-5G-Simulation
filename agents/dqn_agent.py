@@ -210,7 +210,7 @@ class DQNAgent:
         self.optimizer.zero_grad()
         loss.backward()
         # Gradient clipping — loss spike'larını önler (Q-value overestimation)
-        nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
+        nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         self.epsilon = max(self.epsilon_end, self.epsilon - self.epsilon_decay)

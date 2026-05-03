@@ -4,7 +4,10 @@ import argparse
 import collections
 import numpy as np
 
-from dqn_agent import DQNAgent
+try:
+    from agents.dqn_agent import DQNAgent
+except ImportError:
+    from dqn_agent import DQNAgent
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +110,8 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
             next_state, reward, terminated, truncated, _ = result
             done = terminated or truncated
 
-            agent.store_transition(state, action, reward, next_state, done)
+            # Reward normalizasyonu — Q-değerlerini küçük tutar, loss spike'larını önler
+            agent.store_transition(state, action, reward / 100.0, next_state, done)
             loss = agent.train_step()
             if loss:
                 last_loss = loss
@@ -122,13 +126,21 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
 
         if episode % 50 == 0:
             print(f"Episode {episode:5d} | Reward: {episode_reward:7.1f} | "
-                  f"Avg100: {avg_100:7.1f} | ε: {agent.epsilon:.4f} | Loss: {last_loss:.5f}")
+                  f"Avg100: {avg_100:7.1f} | eps: {agent.epsilon:.4f} | Loss: {last_loss:.5f}")
 
         if checkpoint_dir and episode % checkpoint_every == 0:
             os.makedirs(checkpoint_dir, exist_ok=True)
             agent.save(os.path.join(checkpoint_dir, f"model_ep{episode}.pth"))
 
     logger.close()
+
+    # Final model kaydet — GUI ve DQNScheduler bunu kullanır
+    if checkpoint_dir:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        final_path = os.path.join(checkpoint_dir, "model_final.pth")
+        agent.save(final_path)
+        print(f"Final model kaydedildi: {final_path}")
+
     print("Eğitim tamamlandı.")
 
 

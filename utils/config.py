@@ -21,6 +21,7 @@ class Config:
     hidden_size: int = 256
     n_episodes: int = 5000
     max_steps: int = 200
+    checkpoint_every: int = 100
 
 
 def load_config(path: str | Path) -> Config:

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from env.network_env import FiveGEnv
 from baselines.schedulers import RandomScheduler, RoundRobinScheduler, ProportionalFairScheduler
+from agents.dqn_scheduler import DQNScheduler
 from utils.config import load_config
 
 # ── palette ────────────────────────────────────────────────────────────────
@@ -35,16 +36,28 @@ PLOT_BG   = '#1e1e2e'
 GRID_COL  = '#313244'
 HIST_LEN  = 200   # steps to display in history plots
 
-SCENARIO_OPTS = {
-    "A  ·  10 UE / 50 RB":          "scenario_a",
-    "B  ·  15 UE / 75 RB":          "scenario_b",
-    "C  ·  20 UE / 100 RB":         "scenario_c",
-    "D  ·  20 UE / 50 RB (scarce)": "scenario_d",
-}
+def _discover_scenarios() -> dict:
+    """configs/ klasöründeki tüm scenario_*.yaml dosyalarını bulur."""
+    import glob
+    opts = {}
+    files = sorted(glob.glob(os.path.join("configs", "scenario_*.yaml")))
+    for f in files:
+        name = os.path.basename(f).replace(".yaml", "")   # scenario_a
+        letter = name.split("_")[-1].upper()               # A
+        try:
+            cfg = load_config(f)
+            label = f"{letter}  ·  {cfg.n_ue} UE / {cfg.n_rb} RB"
+        except Exception:
+            label = letter
+        opts[label] = name
+    return opts if opts else {"A  ·  10 UE / 50 RB": "scenario_a"}
+
+SCENARIO_OPTS = _discover_scenarios()
 SCHED_OPTS = {
     "Random":            RandomScheduler,
     "Round Robin":       RoundRobinScheduler,
     "Proportional Fair": ProportionalFairScheduler,
+    "DQN Agent":         DQNScheduler,
 }
 
 
@@ -135,6 +148,8 @@ class SimApp:
 
         ttk.Button(btn_f, text="↺ Reset", style='Dark.TButton',
                    command=self._reset_env).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+        ttk.Button(btn_f, text="⟳ Refresh", style='Dark.TButton',
+                   command=self._refresh_scenarios).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
         ttk.Button(btn_f, text="→ Step", style='Dark.TButton',
                    command=self._do_step).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
         self._run_btn = ttk.Button(btn_f, text="▶ Run", style='Run.TButton',
@@ -333,7 +348,14 @@ class SimApp:
         self._env.mobility = mob
 
         sched_cls = SCHED_OPTS.get(skey, RoundRobinScheduler)
-        self._scheduler = sched_cls(cfg.n_ue, cfg.n_rb)
+        scenario_key = SCENARIO_OPTS[key][-1]  # 'scenario_a' → 'a'
+        if sched_cls is DQNScheduler:
+            self._scheduler = DQNScheduler(cfg.n_ue, cfg.n_rb, scenario=scenario_key)
+            status = self._scheduler.model_info
+            self.root.title(f"5G Network Simulation  ·  DQN ({status})")
+        else:
+            self._scheduler = sched_cls(cfg.n_ue, cfg.n_rb)
+            self.root.title("5G Network Simulation  ·  DRL Project")
 
         self._state, _ = self._env.reset()
         self._ue_angles  = np.random.uniform(0, 2*np.pi, cfg.n_ue)
@@ -358,11 +380,35 @@ class SimApp:
         if hasattr(self, '_run_btn'):
             self._run_btn.config(text="▶ Run")
 
+    def _refresh_scenarios(self):
+        """Yeni YAML eklendikten sonra senaryo listesini yeniler."""
+        global SCENARIO_OPTS
+        SCENARIO_OPTS = _discover_scenarios()
+        self._scen_var.set(list(SCENARIO_OPTS)[0])
+        # Combobox değerlerini güncelle
+        for widget in self.root.winfo_children():
+            self._update_combobox(widget)
+        self._reset_env()
+
+    def _update_combobox(self, widget):
+        if isinstance(widget, ttk.Combobox):
+            if self._scen_var in (widget.cget('textvariable'),):
+                widget.config(values=list(SCENARIO_OPTS))
+        for child in widget.winfo_children():
+            self._update_combobox(child)
+
     def _on_sched_change(self):
         if self._env is None:
             return
-        cls = SCHED_OPTS.get(self._sched_var.get(), RoundRobinScheduler)
-        self._scheduler = cls(self._env.n_ue, self._env.n_rb)
+        skey = self._sched_var.get()
+        cls  = SCHED_OPTS.get(skey, RoundRobinScheduler)
+        if cls is DQNScheduler:
+            scenario_key = SCENARIO_OPTS[self._scen_var.get()][-1]
+            self._scheduler = DQNScheduler(self._env.n_ue, self._env.n_rb, scenario=scenario_key)
+            self.root.title(f"5G Network Simulation  ·  DQN ({self._scheduler.model_info})")
+        else:
+            self._scheduler = cls(self._env.n_ue, self._env.n_rb)
+            self.root.title("5G Network Simulation  ·  DRL Project")
 
     def _on_mobility_toggle(self):
         if self._env is not None:

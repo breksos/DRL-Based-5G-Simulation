@@ -2,9 +2,10 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Trained model weights (büyük dosyalar)
+# Trained model weights — checkpoint'ler ignore, sadece final modeller commit'lenir
 *.pth
 *.pt
+!**/model_final.pth
 
 # Ortam ve gizli dosyalar
 .env
