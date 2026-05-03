@@ -1,5 +1,14 @@
 __pycache__/
 *.pyc
 *.pyo
-results/models/
-results/logs/
+
+# Trained model weights (büyük dosyalar)
+*.pth
+*.pt
+
+# Ortam ve gizli dosyalar
+.env
+.claude/
+
+# IDE
+*.log

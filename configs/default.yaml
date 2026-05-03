@@ -1,26 +1,18 @@
 # 5G DQN Resource Allocation — Default Hyperparameters
-
-# --- Ortam ---
-n_ue: 10          # Kullanıcı sayısı
-n_rb: 50          # Resource Block sayısı
-cell_radius: 500  # Hücre yarıçapı (metre)
-
-# --- Reward ---
-alpha: 0.5        # Throughput ağırlığı
-beta: 0.5         # Fairness ağırlığı
-
-# --- DQN ---
-lr: 0.0005              # Learning rate (Adam)
-gamma: 0.99             # Discount factor
+n_ue: 10
+n_rb: 50
+cell_radius: 500.0
+alpha: 0.5
+beta: 0.5
+lr: 0.0005
+gamma: 0.99
 epsilon_start: 1.0
 epsilon_end: 0.01
 epsilon_decay_steps: 50000
 target_update_freq: 1000
-
-# --- Replay Buffer ---
 buffer_size: 100000
 batch_size: 64
-
-# --- Eğitim ---
+hidden_size: 256
 n_episodes: 10000
+max_steps: 200
 checkpoint_every: 100
