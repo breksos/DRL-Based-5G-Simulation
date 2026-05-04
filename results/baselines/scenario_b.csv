@@ -1,0 +1,5 @@
+scenario,scheduler,n_ue,n_rb,avg_throughput_mbps,std_throughput_mbps,avg_fairness,std_fairness
+b,RR,15,75,44.4694,9.344,0.6301,0.0721
+b,PF,15,75,45.2623,9.5813,0.0667,0.0
+b,Random,15,75,43.642,8.8064,0.5573,0.0556
+b,DQN,15,75,60.5238,20.5985,0.1961,0.1218
