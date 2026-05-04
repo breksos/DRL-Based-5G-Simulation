@@ -11,6 +11,8 @@ from gymnasium import spaces
 
 from env.channel_model import snr_db, capacity_bps, random_ue_distances, RB_BANDWIDTH_HZ
 
+THROUGHPUT_NORM_MBPS = 50.0  # keeps reward in ~[0, 2] per step
+
 
 class FiveGEnv(gym.Env):
     metadata = {"render_modes": []}
@@ -78,8 +80,9 @@ class FiveGEnv(gym.Env):
         ue_throughput = np.zeros(self.n_ue, dtype=np.float32)
         rb_occupancy = np.zeros(self.n_rb, dtype=np.float32)
 
+        assert all(0 <= int(ue) < self.n_ue for ue in action), f"action out of range: {action}"
         for rb_idx, ue_idx in enumerate(action):
-            ue_idx = int(ue_idx) % self.n_ue
+            ue_idx = int(ue_idx)
             cap = float(capacity_bps(self._snrs[ue_idx], RB_BANDWIDTH_HZ))
             ue_throughput[ue_idx] += cap
             rb_occupancy[rb_idx] = ue_idx / max(self.n_ue - 1, 1)  # normalised
@@ -115,6 +118,8 @@ class FiveGEnv(gym.Env):
         return float((s ** 2) / (self.n_ue * (x ** 2).sum() + 1e-9))
 
     def _compute_reward(self, throughputs: np.ndarray) -> float:
-        norm_tp = throughputs.sum() / 1e6   # Mbps, unnormalised but consistent
+        # Normalise to [0,~1] so Q-values stay in a tractable range.
+        # info["throughput_total"] is kept in bps for evaluation metrics.
+        norm_tp = throughputs.sum() / 1e6 / THROUGHPUT_NORM_MBPS
         fairness = self._jains_index(throughputs)
         return self.alpha * norm_tp + self.beta * fairness

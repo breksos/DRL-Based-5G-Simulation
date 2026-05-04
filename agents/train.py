@@ -13,57 +13,20 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Action Space Adapter
 # ---------------------------------------------------------------------------
-# 5G ortamında action space N_UE^N_RB boyutunda — DQN için çok büyük.
-# Çözüm: DQN sadece N_UE adet skor üretir (hangi UE'ye öncelik verilmeli).
-# Adapter bu skorları alıp her RB'yi en yüksek skorlu UE'ye atar.
+# Action space is N_UE^N_RB — too large for DQN.
+# Solution: DQN outputs one score per UE (priority signal).
+# Adapter assigns all RBs to the chosen UE (pure greedy).
+# This gives the DQN full control over all RBs while keeping action_dim = N_UE.
 
 class ActionAdapter:
     def __init__(self, n_ue: int, n_rb: int):
         self.n_ue = n_ue
         self.n_rb = n_rb
-        # DQN'in gördüğü action sayısı: N_UE
         self.action_dim = n_ue
 
     def to_allocation(self, dqn_action: int) -> np.ndarray:
-        """DQN'den gelen tek integer action'ı N_RB boyutlu allocation array'e çevirir.
-
-        dqn_action: hangi UE'nin bu adımda öncelikli olduğu (0..N_UE-1).
-        Strateji: seçilen UE'ye RB'lerin yarısını ver, kalanı round-robin dağıt.
-        Bu sayede agent "kime öncelik ver" kararını öğrenir.
-        """
-        allocation = np.zeros(self.n_rb, dtype=np.int64)
-        half = self.n_rb // 2
-        # İlk yarı: öncelikli UE
-        allocation[:half] = dqn_action
-        # İkinci yarı: round-robin
-        for i in range(half, self.n_rb):
-            allocation[i] = i % self.n_ue
-        return allocation
-
-
-# ---------------------------------------------------------------------------
-# Mock Environment (CartPole benzeri) — gymnasium olmadan çalışır
-# ---------------------------------------------------------------------------
-
-class MockEnv:
-    """4 boyutlu state, 2 action (sol/sağ). Reward = 1.0 her adım.
-    200 adımda done. DQN'in temel öğrenme döngüsünü doğrulamak için kullanılır.
-    """
-    def __init__(self):
-        self.state_dim = 4
-        self.action_dim = 2
-        self._step = 0
-
-    def reset(self):
-        self._step = 0
-        return np.random.uniform(-0.05, 0.05, size=4).astype(np.float32)
-
-    def step(self, action):
-        self._step += 1
-        next_state = np.random.uniform(-0.05, 0.05, size=4).astype(np.float32)
-        reward = 1.0
-        done = self._step >= 200
-        return next_state, reward, done, False, {}
+        """Map a single UE index to an N_RB allocation (all RBs to that UE)."""
+        return np.full(self.n_rb, dqn_action, dtype=np.int64)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +50,7 @@ class CSVLogger:
 
 
 # ---------------------------------------------------------------------------
-# Eğitim Döngüsü
+# Training loop
 # ---------------------------------------------------------------------------
 
 def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
@@ -110,8 +73,8 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
             next_state, reward, terminated, truncated, _ = result
             done = terminated or truncated
 
-            # Reward normalizasyonu — Q-değerlerini küçük tutar, loss spike'larını önler
-            agent.store_transition(state, action, reward / 100.0, next_state, done)
+            # Reward is already normalised in env._compute_reward; store directly.
+            agent.store_transition(state, action, reward, next_state, done)
             loss = agent.train_step()
             if loss:
                 last_loss = loss
@@ -134,14 +97,13 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
 
     logger.close()
 
-    # Final model kaydet — GUI ve DQNScheduler bunu kullanır
     if checkpoint_dir:
         os.makedirs(checkpoint_dir, exist_ok=True)
         final_path = os.path.join(checkpoint_dir, "model_final.pth")
         agent.save(final_path)
-        print(f"Final model kaydedildi: {final_path}")
+        print(f"Final model saved: {final_path}")
 
-    print("Eğitim tamamlandı.")
+    print("Training complete.")
 
 
 # ---------------------------------------------------------------------------
@@ -150,66 +112,48 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["mock", "5g"], default="mock",
-                        help="mock: CartPole benzeri test | 5g: gerçek ortam (Phase 3'te)")
+    parser.add_argument("--mode", choices=["5g"], default="5g")
     parser.add_argument("--episodes", type=int, default=500)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--log", type=str, default="../results/logs/train_log.csv")
     parser.add_argument("--checkpoint_dir", type=str, default="../results/models")
     args = parser.parse_args()
 
-    if args.mode == "mock":
-        print("=== Mock Environment Testi ===")
-        env = MockEnv()
-        agent = DQNAgent(
-            state_dim=env.state_dim,
-            action_dim=env.action_dim,
-            lr=args.lr,
-            epsilon_decay_steps=10_000,  # mock için daha hızlı decay
-        )
-        train(env, agent, n_episodes=args.episodes,
-              log_path=args.log, checkpoint_dir=None)
+    import sys
+    sys.path.append("..")
+    from env.network_env import FiveGEnv
+    import yaml
 
-    elif args.mode == "5g":
-        # Phase 3'te Berk'in FiveGEnv'i hazır olduğunda burası aktif edilir
-        import sys
-        sys.path.append("..")
-        from env.network_env import FiveGEnv
-        import yaml
+    with open("../configs/default.yaml") as f:
+        cfg = yaml.safe_load(f)
 
-        with open("../configs/default.yaml") as f:
-            cfg = yaml.safe_load(f)
+    env = FiveGEnv(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
+    adapter = ActionAdapter(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
 
-        env = FiveGEnv(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
-        adapter = ActionAdapter(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
+    state_dim = 2 * cfg["n_ue"] + cfg["n_rb"]
 
-        # State dim: 2*N_UE + N_RB (SNR + throughput + rb_occupancy)
-        state_dim = 2 * cfg["n_ue"] + cfg["n_rb"]
+    agent = DQNAgent(
+        state_dim=state_dim,
+        action_dim=adapter.action_dim,
+        lr=args.lr,
+        gamma=cfg.get("gamma", 0.99),
+        epsilon_decay_steps=cfg.get("epsilon_decay_steps", 50_000),
+        buffer_size=cfg.get("buffer_size", 100_000),
+        batch_size=cfg.get("batch_size", 64),
+    )
 
-        agent = DQNAgent(
-            state_dim=state_dim,
-            action_dim=adapter.action_dim,
-            lr=args.lr,
-            gamma=cfg.get("gamma", 0.99),
-            epsilon_decay_steps=cfg.get("epsilon_decay_steps", 50_000),
-            buffer_size=cfg.get("buffer_size", 100_000),
-            batch_size=cfg.get("batch_size", 64),
-        )
+    class AdaptedEnv:
+        def __init__(self, env, adapter):
+            self._env = env
+            self._adapter = adapter
 
-        # 5G ortamında env.step() allocation array bekler, agent integer döndürür
-        # Bu yüzden env.step'i adapter ile sarıyoruz
-        class AdaptedEnv:
-            def __init__(self, env, adapter):
-                self._env = env
-                self._adapter = adapter
+        def reset(self):
+            return self._env.reset()
 
-            def reset(self):
-                return self._env.reset()
+        def step(self, action: int):
+            allocation = self._adapter.to_allocation(action)
+            return self._env.step(allocation)
 
-            def step(self, action: int):
-                allocation = self._adapter.to_allocation(action)
-                return self._env.step(allocation)
-
-        adapted_env = AdaptedEnv(env, adapter)
-        train(adapted_env, agent, n_episodes=args.episodes,
-              log_path=args.log, checkpoint_dir=args.checkpoint_dir)
+    adapted_env = AdaptedEnv(env, adapter)
+    train(adapted_env, agent, n_episodes=args.episodes,
+          log_path=args.log, checkpoint_dir=args.checkpoint_dir)

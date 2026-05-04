@@ -134,9 +134,6 @@ class SimApp:
         sep()
 
         # Buttons
-        btn_f = tk.Frame(f, bg=PANEL_BG)
-        btn_f.pack(padx=8, pady=4, fill=tk.X)
-
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('Dark.TButton', background='#313244', foreground=FG,
@@ -146,13 +143,18 @@ class SimApp:
                          borderwidth=0, padding=4)
         style.map('Run.TButton', background=[('active', '#2a9d59')])
 
-        ttk.Button(btn_f, text="↺ Reset", style='Dark.TButton',
+        btn_row1 = tk.Frame(f, bg=PANEL_BG)
+        btn_row1.pack(padx=8, pady=(4, 2), fill=tk.X)
+        ttk.Button(btn_row1, text="↺ Reset", style='Dark.TButton',
                    command=self._reset_env).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        ttk.Button(btn_f, text="⟳ Refresh", style='Dark.TButton',
+        ttk.Button(btn_row1, text="⟳ Refresh", style='Dark.TButton',
                    command=self._refresh_scenarios).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        ttk.Button(btn_f, text="→ Step", style='Dark.TButton',
+
+        btn_row2 = tk.Frame(f, bg=PANEL_BG)
+        btn_row2.pack(padx=8, pady=(2, 4), fill=tk.X)
+        ttk.Button(btn_row2, text="→ Step", style='Dark.TButton',
                    command=self._do_step).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        self._run_btn = ttk.Button(btn_f, text="▶ Run", style='Run.TButton',
+        self._run_btn = ttk.Button(btn_row2, text="▶ Run", style='Run.TButton',
                                    command=self._toggle_run)
         self._run_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
 
@@ -161,9 +163,20 @@ class SimApp:
         speed_row = tk.Frame(f, bg=PANEL_BG)
         speed_row.pack(fill=tk.X, padx=10, pady=2)
         self._speed_var = tk.IntVar(value=120)
-        ttk.Scale(speed_row, from_=20, to=800, orient='horizontal',
-                  variable=self._speed_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self._speed_lbl = tk.Label(speed_row, textvariable=self._speed_var,
+        self._speed_disp = tk.StringVar(value="120")
+        def _on_speed(v):
+            try:
+                iv = int(round(float(v)))
+            except (TypeError, ValueError):
+                return
+            iv = max(20, min(800, iv))
+            self._speed_var.set(iv)
+            self._speed_disp.set(str(iv))
+        speed_scale = ttk.Scale(speed_row, from_=20, to=800, orient='horizontal',
+                                command=_on_speed)
+        speed_scale.set(120)
+        speed_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._speed_lbl = tk.Label(speed_row, textvariable=self._speed_disp,
                                    width=4, bg=PANEL_BG, fg=FG, font=('Helvetica', 8))
         self._speed_lbl.pack(side=tk.LEFT)
 

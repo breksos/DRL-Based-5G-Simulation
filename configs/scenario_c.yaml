@@ -9,10 +9,10 @@ gamma: 0.99
 epsilon_start: 1.0
 epsilon_end: 0.01
 epsilon_decay_steps: 50000
-target_update_freq: 1000
+target_update_freq: 500
 buffer_size: 100000
 batch_size: 64
 hidden_size: 256
-n_episodes: 10000
+n_episodes: 2000
 max_steps: 200
 checkpoint_every: 100

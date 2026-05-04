@@ -1,0 +1,17 @@
+scenario,scheduler,avg_throughput_mbps,std_throughput_mbps,avg_fairness,std_fairness
+a,Random,27.1944,7.2618,0.5807,0.0778
+a,RoundRobin,27.2403,7.2482,0.6376,0.1031
+a,ProportionalFair,70.4854,18.7582,0.1,0.0
+a,DQN,60.4357,27.6803,0.1,0.0
+b,Random,41.8477,8.4187,0.554,0.0557
+b,RoundRobin,41.8548,8.4224,0.6244,0.0708
+b,ProportionalFair,114.7792,21.824,0.0667,0.0
+b,DQN,75.7011,35.8286,0.0667,0.0
+c,Random,55.8754,9.442,0.5379,0.0521
+c,RoundRobin,55.8898,9.4233,0.6132,0.0669
+c,ProportionalFair,162.1757,26.7808,0.05,0.0
+c,DQN,60.7086,45.7053,0.05,0.0
+d,Random,27.9855,4.6664,0.4788,0.0437
+d,RoundRobin,27.9449,4.7116,0.5951,0.063
+d,ProportionalFair,81.0879,13.3904,0.05,0.0
+d,DQN,34.4299,25.572,0.05,0.0

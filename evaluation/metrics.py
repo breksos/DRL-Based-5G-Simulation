@@ -23,10 +23,11 @@ def per_ue_throughput(action: np.ndarray, snrs: np.ndarray,
     snrs   : (N_UE,) float array — SNR in dB per UE
     """
     n_ue = len(snrs)
+    assert all(0 <= int(ue) < n_ue for ue in action), f"action out of range: {action}"
     tp = np.zeros(n_ue, dtype=np.float64)
     caps = capacity_bps(snrs, bw_hz)
     for ue in action:
-        tp[int(ue) % n_ue] += caps[int(ue) % n_ue]
+        tp[int(ue)] += caps[int(ue)]
     return tp
 
 

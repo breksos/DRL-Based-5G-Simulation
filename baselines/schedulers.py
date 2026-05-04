@@ -24,8 +24,12 @@ class _BaseScheduler:
 class RandomScheduler(_BaseScheduler):
     """Assigns each RB to a uniformly random UE. Lower-bound reference."""
 
+    def __init__(self, n_ue: int, n_rb: int, seed: int = None):
+        super().__init__(n_ue, n_rb)
+        self._rng = np.random.default_rng(seed)
+
     def allocate(self, state: np.ndarray) -> np.ndarray:
-        return np.random.randint(0, self.n_ue, size=self.n_rb)
+        return self._rng.integers(0, self.n_ue, size=self.n_rb)
 
 
 class RoundRobinScheduler(_BaseScheduler):
@@ -37,7 +41,7 @@ class RoundRobinScheduler(_BaseScheduler):
 
     def allocate(self, state: np.ndarray) -> np.ndarray:
         action = np.array([(self._counter + i) % self.n_ue for i in range(self.n_rb)], dtype=int)
-        self._counter = (self._counter + self.n_rb) % self.n_ue
+        self._counter = (self._counter + 1) % self.n_ue
         return action
 
     def reset(self):
@@ -48,17 +52,19 @@ class ProportionalFairScheduler(_BaseScheduler):
     """
     Priority = instant_rate / avg_rate.
     Assigns all RBs to the highest-priority UE; updates its EMA rate.
-    avg_rate is initialised to 1.0 to avoid division-by-zero on the first call.
+    Lazy-initialised on first allocate call to avoid scale mismatch (bps vs. 1.0).
     """
 
     def __init__(self, n_ue: int, n_rb: int, alpha: float = 0.001):
         super().__init__(n_ue, n_rb)
         self._alpha = alpha
-        self._avg_rates = np.ones(n_ue, dtype=np.float64)
+        self._avg_rates = None  # lazy-init on first allocate
 
     def allocate(self, state: np.ndarray) -> np.ndarray:
         snrs = state[:self.n_ue].astype(np.float64)
         instant = capacity_bps(snrs)                      # (N_UE,) bps
+        if self._avg_rates is None:
+            self._avg_rates = instant.mean() * np.ones(self.n_ue, dtype=np.float64)
         priority = instant / (self._avg_rates + 1e-9)
         best = int(np.argmax(priority))
 
@@ -70,4 +76,4 @@ class ProportionalFairScheduler(_BaseScheduler):
         return np.full(self.n_rb, best, dtype=int)
 
     def reset(self):
-        self._avg_rates = np.ones(self.n_ue, dtype=np.float64)
+        self._avg_rates = None

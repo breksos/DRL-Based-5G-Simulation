@@ -200,10 +200,11 @@ class DQNAgent:
         # Gerçekleşen aksiyonlara karşılık gelen Q değerleri
         q_values = self.q_net(states_t).gather(1, actions_t.unsqueeze(1)).squeeze(1)
 
-        # Bellman hedefi: r + γ * max_a' Q_target(s', a')
-        # Terminal state'lerde (done=1) gelecek terimi sıfırlanır
+        # Double DQN: action selection via q_net, evaluation via target_net.
+        # Reduces Q-value overestimation that causes loss spikes.
         with torch.no_grad():
-            max_next_q = self.target_net(next_states_t).max(dim=1)[0]
+            next_actions = self.q_net(next_states_t).argmax(dim=1, keepdim=True)
+            max_next_q = self.target_net(next_states_t).gather(1, next_actions).squeeze(1)
             targets = rewards_t + self.gamma * max_next_q * (1.0 - dones_t)
 
         loss = self.loss_fn(q_values, targets)
