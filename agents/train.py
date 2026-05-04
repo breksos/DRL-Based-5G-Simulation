@@ -9,14 +9,19 @@ try:
 except ImportError:
     from dqn_agent import DQNAgent
 
-
 # ---------------------------------------------------------------------------
 # Action Space Adapter
 # ---------------------------------------------------------------------------
-# Action space is N_UE^N_RB — too large for DQN.
-# Solution: DQN outputs one score per UE (priority signal).
-# Adapter assigns all RBs to the chosen UE (pure greedy).
-# This gives the DQN full control over all RBs while keeping action_dim = N_UE.
+# DQN outputs one Q-value per UE (n_ue scores). Adapter converts these to a
+# per-RB allocation via softmax + multinomial sampling:
+#   scores = q_values + LAMBDA * snr_norm
+#   probs  = softmax(scores)          # scale-invariant; handles any Q magnitude
+#   RB_i   ~ Categorical(probs)       # seeded by rb_idx for reproducibility
+# This spreads RBs across UEs in proportion to learned priorities × channel
+# quality, regardless of the absolute Q-value scale.
+
+LAMBDA = 0.5
+
 
 class ActionAdapter:
     def __init__(self, n_ue: int, n_rb: int):
@@ -24,9 +29,21 @@ class ActionAdapter:
         self.n_rb = n_rb
         self.action_dim = n_ue
 
-    def to_allocation(self, dqn_action: int) -> np.ndarray:
-        """Map a single UE index to an N_RB allocation (all RBs to that UE)."""
-        return np.full(self.n_rb, dqn_action, dtype=np.int64)
+    def to_allocation(self, snrs: np.ndarray, q_values: np.ndarray) -> np.ndarray:
+        """Per-RB allocation via softmax-weighted multinomial sampling.
+
+        snrs     : (n_ue,) SNR in dB — taken from state[:n_ue].
+        q_values : (n_ue,) Q-vector from DQNAgent.q_values().
+        """
+        snr_norm = snrs / 30.0
+        scores = q_values + LAMBDA * snr_norm
+        scores = scores - scores.max()          # numerically stable softmax
+        probs = np.exp(scores)
+        probs = probs / probs.sum()
+        allocation = np.empty(self.n_rb, dtype=np.int64)
+        for rb_idx in range(self.n_rb):
+            allocation[rb_idx] = int(np.random.default_rng(rb_idx).choice(self.n_ue, p=probs))
+        return allocation
 
 
 # ---------------------------------------------------------------------------
@@ -68,12 +85,13 @@ def train(env, agent: DQNAgent, n_episodes: int, log_path: str,
         done = False
 
         while not done:
+            # select_action returns the int stored in the replay buffer.
+            # AdaptedEnv.step derives the actual per-RB allocation from q_values.
             action = agent.select_action(state)
             result = env.step(action)
             next_state, reward, terminated, truncated, _ = result
             done = terminated or truncated
 
-            # Reward is already normalised in env._compute_reward; store directly.
             agent.store_transition(state, action, reward, next_state, done)
             loss = agent.train_step()
             if loss:
@@ -129,7 +147,6 @@ if __name__ == "__main__":
 
     env = FiveGEnv(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
     adapter = ActionAdapter(n_ue=cfg["n_ue"], n_rb=cfg["n_rb"])
-
     state_dim = 2 * cfg["n_ue"] + cfg["n_rb"]
 
     agent = DQNAgent(
@@ -143,17 +160,25 @@ if __name__ == "__main__":
     )
 
     class AdaptedEnv:
-        def __init__(self, env, adapter):
+        def __init__(self, env, adapter, agent):
             self._env = env
             self._adapter = adapter
+            self._agent = agent
+            self._last_state = None
 
         def reset(self):
-            return self._env.reset()
+            result = self._env.reset()
+            self._last_state = result[0] if isinstance(result, tuple) else result
+            return result
 
         def step(self, action: int):
-            allocation = self._adapter.to_allocation(action)
-            return self._env.step(allocation)
+            snrs = self._last_state[:self._adapter.n_ue]
+            q_vals = self._agent.q_values(self._last_state)
+            allocation = self._adapter.to_allocation(snrs, q_vals)
+            result = self._env.step(allocation)
+            self._last_state = result[0]
+            return result
 
-    adapted_env = AdaptedEnv(env, adapter)
+    adapted_env = AdaptedEnv(env, adapter, agent)
     train(adapted_env, agent, n_episodes=args.episodes,
           log_path=args.log, checkpoint_dir=args.checkpoint_dir)

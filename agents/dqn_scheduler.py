@@ -58,14 +58,11 @@ class DQNScheduler:
         return files[-1]
 
     def allocate(self, state: np.ndarray) -> np.ndarray:
-        """State'e bakarak N_RB boyutlu allocation array döndürür.
-
-        Model yüklü değilse Round Robin fallback kullanır.
-        """
+        """Return N_RB allocation using per-RB scoring (q_values + SNR)."""
         if not self._loaded:
             return np.array([i % self.n_ue for i in range(self.n_rb)], dtype=int)
-        action = self._agent.select_action(state)
-        return self._adapter.to_allocation(action)
+        q_vals = self._agent.q_values(state)
+        return self._adapter.to_allocation(state[:self.n_ue], q_vals)
 
     def reset(self):
         pass  # DQN stateless — episode başında sıfırlanacak bir şey yok

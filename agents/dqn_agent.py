@@ -153,26 +153,25 @@ class DQNAgent:
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.SmoothL1Loss()  # Huber loss — more stable than MSE for outliers
         self.buffer = ReplayBuffer(maxlen=buffer_size)
 
         self.step_count = 0
         self.last_loss = 0.0
 
     def select_action(self, state: np.ndarray) -> int:
-        """ε-greedy aksiyon seçimi.
-
-        Args:
-            state: Mevcut state vektörü.
-
-        Returns:
-            Seçilen aksiyon indeksi (int).
-        """
+        """ε-greedy action selection. Returns int index for replay buffer."""
         if random.random() < self.epsilon:
             return random.randint(0, self.action_dim - 1)
         state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
             return int(self.q_net(state_t).argmax(dim=1).item())
+
+    def q_values(self, state: np.ndarray) -> np.ndarray:
+        """Return full Q-vector (n_ue,) for use by ActionAdapter."""
+        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            return self.q_net(state_t).cpu().numpy().flatten()
 
     def store_transition(self, state, action, reward, next_state, done):
         """Geçişi replay buffer'a kaydeder."""
@@ -242,11 +241,15 @@ class DQNAgent:
         }, path)
 
     def load(self, path: str):
-        """Checkpoint yükler. Eğitime kaldığı yerden devam etmek veya evaluation için.
-
-        Args:
-            path: Yüklenecek .pth dosya yolu.
-        """
+        """Load a checkpoint for inference or continued training."""
+        import warnings
+        warnings.warn(
+            "Loaded checkpoint may have been trained on a different reward scale. "
+            "If resuming training, verify env._compute_reward matches the training-time scale "
+            "(current: throughput / THROUGHPUT_NORM_MBPS = 50). "
+            "Pure inference (DQNScheduler) is unaffected.",
+            RuntimeWarning,
+        )
         checkpoint = torch.load(path, map_location=self.device)
         self.q_net.load_state_dict(checkpoint["q_net"])
         self.target_net.load_state_dict(checkpoint["target_net"])
