@@ -105,8 +105,8 @@ def run_training(scenario: str, cfg, n_episodes_override: int = None):
     os.makedirs(checkpoint_dir, exist_ok=True)
     agent.save(os.path.join(checkpoint_dir, "model_final.pth"))
     env.close()
-    print(f"\nModel kaydedildi → results/models/scenario_{scenario}/model_final.pth")
-    print("GUI'de görüntülemek için: python main.py --gui")
+    print(f"\nModel kaydedildi: results/models/scenario_{scenario}/model_final.pth")
+    print("GUI icin: python main.py --gui")
 
 
 def main():
