@@ -77,8 +77,21 @@ def run_training(scenario: str, cfg, n_episodes_override: int = None):
     )
 
     class AdaptedEnv:
-        def reset(self_): return env.reset()
-        def step(self_, a): return env.step(adapter.to_allocation(a))
+        def __init__(self_):
+            self_._last_state = None
+
+        def reset(self_):
+            result = env.reset()
+            self_._last_state = result[0] if isinstance(result, tuple) else result
+            return result
+
+        def step(self_, action: int):
+            snrs = self_._last_state[:adapter.n_ue]
+            q_vals = agent.q_values(self_._last_state)
+            allocation = adapter.to_allocation(snrs, q_vals)
+            result = env.step(allocation)
+            self_._last_state = result[0]
+            return result
 
     log_path       = os.path.join("results", "logs",   f"train_scenario_{scenario}.csv")
     checkpoint_dir = os.path.join("results", "models", f"scenario_{scenario}")

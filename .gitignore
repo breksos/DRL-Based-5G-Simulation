@@ -8,7 +8,6 @@ __pycache__/
 !**/model_final.pth
 
 # Ortam ve gizli dosyalar
-.env
 .claude/
 
 # IDE
