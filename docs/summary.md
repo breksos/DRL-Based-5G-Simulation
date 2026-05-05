@@ -111,10 +111,12 @@ Every user gets the same number of RBs regardless of channel quality.
 → **Fairest baseline, but wastes RBs on weak users**
 
 ### Proportional Fair (PF)
-Assigns all RBs to the user with the best `instant_rate / average_rate` ratio.  
-Prioritises users who have good channel AND haven't received much recently.  
-→ Throughput: ~30 Mbps, Fairness: ~0.10 per step  
-→ **Maximises throughput but one user monopolises per step**
+For each RB independently, picks the UE with the best `instant_rate / avg_rate`
+ratio and EMA-updates that UE's avg_rate before the next RB. Prioritises users
+who have good channel AND haven't received much recently.  
+→ Throughput: ~57–116 Mbps (highest of any scheduler), Fairness: ~0.27–0.31  
+→ **Throughput leader; the reward clamp at 50 Mbps is what neutralises that
+advantage in the combined metric**
 
 ---
 
@@ -192,34 +194,38 @@ Real-time dashboard with 5 live plots — lets you visually see what the schedul
 
 ---
 
-## Actual Results (averaged across all 4 scenarios, R3 models)
+## Actual Results — Combined R per Scenario
 
-Combined R = 0.5 × min(throughput/50 Mbps, 1.0) + 0.5 × fairness
+Combined R = 0.5 × min(throughput / 50 Mbps, 1.0) + 0.5 × Jain_fairness  
+Reported as mean over 5 seeds × 50 episodes per cell. See `results/baselines/comparison.csv`.
 
-| Scheduler | Throughput Mbps | Fairness | Combined R |
-|---|---|---|---|
-| Random | 38.23 | 0.538 | 0.631 |
-| Round Robin | 38.23 | 0.618 | 0.676 |
-| Proportional Fair | 107.14 | 0.067 | 0.533 |
-| **DQN** | **42.36** | **0.460** | **0.622** |
-
-Per-scenario breakdown:
-
-| Scenario | Random R | RR R | PF R | DQN R | Winner |
+| Scenario | Random R | RR R | PF R | DQN R | Best |
 |---|---|---|---|---|---|
-| a (10UE/50RB) | 0.562 | 0.591 | 0.550 | 0.562 | RR |
-| b (15UE/75RB) | 0.696 | 0.731 | 0.533 | 0.705 | RR |
-| c (20UE/100RB) | 0.769 | 0.807 | 0.525 | 0.729 | RR |
-| d (20UE/50RB) | 0.519 | 0.577 | 0.525 | 0.500 | RR |
+| a (10UE/50RB)   | 0.5772 | 0.6074 | 0.6539 | 0.5764 | **PF** |
+| b (15UE/75RB)   | 0.7133 | 0.7497 | 0.6520 | 0.6645 | **RR** |
+| c (20UE/100RB)  | 0.7720 | 0.8111 | 0.6486 | 0.6328 | **RR** |
+| d (20UE/50RB)   | 0.5299 | 0.5898 | 0.6334 | 0.4190 | **PF** |
 
-DQN beats PF in all 4 scenarios. DQN trails RR due to lower fairness (0.40–0.52 vs 0.60–0.64). PF is last in all scenarios after reward clamping removed its unbounded throughput advantage.
+Raw mean throughput (Mbps) — pre-clamp, so PF's throughput lead is visible:
+
+| Scenario | Random | RR | PF | DQN |
+|---|---|---|---|---|
+| a | 28.58 | 28.58 |  56.75 | 29.21 |
+| b | 43.41 | 43.42 |  86.45 | 44.52 |
+| c | 57.63 | 57.62 | 116.03 | 59.01 |
+| d | 28.81 | 28.81 |  60.81 | 29.58 |
+
+**The DQN does not beat any classical baseline on combined R in any of the four scenarios.** The earlier "DQN beats PF in 3/4 scenarios" headline was a metric artifact: (i) PF was implemented as a strawman that gave all RBs to a single argmax UE per step, dragging its fairness to ~0.10; (ii) the reward clamps throughput at 50 Mbps, which removes PF's true advantage. With per-RB PF (the standard formulation) PF's fairness rises to ~0.27–0.31 and PF wins the combined metric in scenarios A and D outright. RR wins B and C. DQN ranks last in A, C, D and second-to-last in B.
 
 ---
 
 ## Likely Presentation Questions
 
+**"Why doesn't your DQN beat the baselines?"**
+> Three reasons, and we report this as a negative result. (a) **Action-space / Bellman-target mismatch.** The DQN outputs one Q-value per UE; the integer stored in the replay buffer is *not* the per-RB allocation that actually generated the reward. The reward is produced by the action adapter (softmax-multinomial), so the Q-target is regressed onto the wrong action. (b) **Stochastic adapter cannot match RR's fairness.** Even with a perfect Q-function, the per-RB softmax-multinomial adapter samples each RB independently — it cannot deterministically rotate UEs the way Round Robin does, so it cannot reach RR-level fairness. (c) **Compute / data limits.** Per-scenario training, 2000 episodes on CPU, single training seed. The architectural fix is a per-(UE, RB) Q-network whose head outputs `n_rb × n_ue` scores and assigns each RB to its argmax UE — the action stored in the buffer would then be the action that produced the reward. That refactor was out of scope here.
+
 **"Why not just use Proportional Fair? It's already used in real 4G/5G."**
-> PF maximises throughput but our reward also includes fairness. With α=β=0.5, PF's low fairness (0.10) gives it a poor combined reward. The DQN learns to balance both simultaneously. PF is also a fixed rule — DQN can adapt to different network conditions.
+> Under our combined metric (α = β = 0.5) with throughput clamped at 50 Mbps, PF actually does win in the resource-scarce scenarios (A and D) — its raw throughput (~57–116 Mbps) is far above any other scheduler. RR wins B and C because its higher fairness compensates once PF's throughput is clipped. There is no scenario in our results where the DQN improves over both PF and RR; the project is a negative result on the methods side.
 
 **"Why DQN and not a simpler algorithm?"**
 > The state space is continuous with 70 dimensions. Tabular Q-learning would need a table with 10^70+ entries — impossible. DQN uses a neural network to approximate the Q-function across this continuous space.
@@ -231,7 +237,7 @@ DQN beats PF in all 4 scenarios. DQN trails RR due to lower fairness (0.40–0.5
 > Without it, you're chasing a moving target: the network updates both the prediction AND the target it's trying to hit simultaneously. The target network is frozen for 1000 steps, giving the training a stable goal.
 
 **"What does the reward function α=β=0.5 mean?"**
-> We treat throughput and fairness as equally important. If α were 1.0, the DQN would learn to behave like PF (pure throughput). If β were 1.0, it would distribute RBs evenly like Round Robin. α=β=0.5 is the balanced case.
+> We treat throughput and fairness as equally important. With α=β=0.5, the DQN must learn to balance both rather than simply maximizing throughput.
 
 **"Your model is too simple — no interference, single cell, no frequency-selective fading."**
 > Acknowledged. This is a proof-of-concept. The MDP formulation, DQN architecture, and reward design are all transferable to more complex simulators (ns-3, simuLTE). We demonstrate the approach works; scaling is future work.
@@ -254,5 +260,5 @@ DQN beats PF in all 4 scenarios. DQN trails RR due to lower fairness (0.40–0.5
 | Capacity per RB at 22 dB | ~1.2 Mbps |
 | DQN hidden layers | 2 × 256 neurons |
 | Replay buffer size | 100,000 |
-| Training episodes | 5,000 |
+| Training episodes | 2,000 |
 | ε decay steps | 50,000 |

@@ -163,9 +163,22 @@ class SimApp:
         speed_row = tk.Frame(f, bg=PANEL_BG)
         speed_row.pack(fill=tk.X, padx=10, pady=2)
         self._speed_var = tk.IntVar(value=120)
-        ttk.Scale(speed_row, from_=20, to=800, orient='horizontal',
-                  variable=self._speed_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self._speed_lbl = tk.Label(speed_row, textvariable=self._speed_var,
+        self._speed_disp = tk.StringVar(value="120")
+
+        def _on_speed(v):
+            try:
+                iv = int(round(float(v)))
+            except (TypeError, ValueError):
+                return
+            iv = max(20, min(800, iv))
+            self._speed_var.set(iv)
+            self._speed_disp.set(str(iv))
+
+        speed_scale = ttk.Scale(speed_row, from_=20, to=800, orient='horizontal',
+                                command=_on_speed)
+        speed_scale.set(120)
+        speed_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._speed_lbl = tk.Label(speed_row, textvariable=self._speed_disp,
                                    width=4, bg=PANEL_BG, fg=FG, font=('Helvetica', 8))
         self._speed_lbl.pack(side=tk.LEFT)
 
@@ -250,17 +263,23 @@ class SimApp:
         self._ax_topo.set_xlabel('x (m)', fontsize=8)
         self._ax_topo.set_ylabel('y (m)', fontsize=8)
 
-        self._topo_lines = LineCollection([], lw=0.8, alpha=0.3)
+        # Lines: colored by SNR (RdYlGn); glow driven per-step in _update_plots
+        self._topo_lines = LineCollection([], lw=1.5)
         self._ax_topo.add_collection(self._topo_lines)
 
+        # Circles: fixed tab20 UE-identity color (SNR shown on lines instead)
         self._topo_sc = self._ax_topo.scatter(
             np.zeros(n_ue), np.zeros(n_ue),
-            c=np.zeros(n_ue), cmap='RdYlGn',
-            s=130, vmin=0, vmax=30, zorder=4,
-            edgecolors='#585b70', linewidths=0.5
+            c=self._uc,
+            s=140, zorder=4,
+            edgecolors='#585b70', linewidths=0.7
         )
-        cb = self._fig.colorbar(self._topo_sc, ax=self._ax_topo,
-                                shrink=0.65, pad=0.02)
+        # Colorbar for line SNR scale
+        from matplotlib.colors import Normalize
+        from matplotlib.cm import ScalarMappable
+        _sm = ScalarMappable(cmap='RdYlGn', norm=Normalize(0, 30))
+        _sm.set_array([])
+        cb = self._fig.colorbar(_sm, ax=self._ax_topo, shrink=0.65, pad=0.02)
         cb.ax.tick_params(colors=FG, labelsize=7)
         cb.set_label('SNR (dB)', color=FG, fontsize=8)
         cb.outline.set_edgecolor(GRID_COL)
@@ -298,16 +317,17 @@ class SimApp:
 
         # ── RB Allocation heatmap (bottom-left 2 cols) ───────────────────
         self._ax_rb = self._fig.add_subplot(gs[2, 0:2])
-        style_ax(self._ax_rb, 'Resource Block Allocation')
+        style_ax(self._ax_rb, 'RB Allocation (last 10 steps)')
         self._ax_rb.grid(False)
         from matplotlib.colors import ListedColormap
         cmap_rb = ListedColormap(self._uc)   # same colours as topology/bars
+        self._rb_history = np.zeros((10, n_rb), dtype=np.int64)
         self._rb_im = self._ax_rb.imshow(
-            np.zeros((1, n_rb)), aspect='auto',
+            self._rb_history, aspect='auto',
             cmap=cmap_rb, vmin=0, vmax=max(n_ue - 1, 1),
             interpolation='nearest'
         )
-        self._ax_rb.set_yticks([])
+        self._ax_rb.set_ylabel('Step (newest at bottom)', fontsize=8, color=FG)
         self._ax_rb.set_xlabel('RB Index', fontsize=8, color=FG)
         cb_ticks = list(range(n_ue)) if n_ue <= 12 else list(range(0, n_ue, 2))
         cb2 = self._fig.colorbar(self._rb_im, ax=self._ax_rb,
@@ -320,19 +340,32 @@ class SimApp:
         # ── History (bottom-right) ────────────────────────────────────────
         self._ax_hist = self._fig.add_subplot(gs[2, 2])
         style_ax(self._ax_hist, 'Live History')
-        self._rew_line,  = self._ax_hist.plot([], [], color=ACCENT,    lw=1.6, label='Reward')
-        self._fair_line, = self._ax_hist.plot([], [], color='#a6e3a1', lw=1.4, ls='--', label='Fairness×20')
-        self._ax_hist.legend(fontsize=7, loc='upper left',
-                             facecolor=PANEL_BG, edgecolor=GRID_COL, labelcolor=FG)
+        self._rew_line, = self._ax_hist.plot([], [], color=ACCENT, lw=1.6, label='Reward')
         self._ax_hist.set_xlabel('Step', fontsize=8)
         self._ax_hist.set_xlim(0, HIST_LEN)
-        self._ax_hist.set_ylim(0, 40)
+        self._ax_hist.set_ylim(0, 1.0)
+        self._ax_hist.set_ylabel('Reward', color=ACCENT, fontsize=8)
+        self._ax_hist.tick_params(axis='y', colors=ACCENT)
+
+        self._ax_fair = self._ax_hist.twinx()
+        self._ax_fair.set_facecolor(PLOT_BG)
+        self._fair_line, = self._ax_fair.plot([], [], color='#a6e3a1', lw=1.4, ls='--', label='Fairness')
+        self._ax_fair.set_ylim(0, 1.0)
+        self._ax_fair.set_ylabel('Fairness', color='#a6e3a1', fontsize=8)
+        self._ax_fair.tick_params(axis='y', colors='#a6e3a1', labelsize=7)
+        for sp in self._ax_fair.spines.values():
+            sp.set_color(GRID_COL)
+
+        lines1, labels1 = self._ax_hist.get_legend_handles_labels()
+        lines2, labels2 = self._ax_fair.get_legend_handles_labels()
+        self._ax_hist.legend(lines1 + lines2, labels1 + labels2, fontsize=7,
+                             loc='upper left', facecolor=PANEL_BG, edgecolor=GRID_COL,
+                             labelcolor=FG)
 
         self._canvas.draw()
 
     # ── env / scheduler lifecycle ──────────────────────────────────────────
     def _reset_env(self):
-        was_running = self._running
         self._running = False
 
         key  = self._scen_var.get()  if hasattr(self, '_scen_var')  else list(SCENARIO_OPTS)[0]
@@ -369,6 +402,7 @@ class SimApp:
         self._reward_hist = []
         self._fair_hist   = []
         self._ep_reward_hist = []
+        self._rb_history = np.zeros((10, cfg.n_rb), dtype=np.int64)
 
         self._init_plots()
         self._update_plots()
@@ -400,6 +434,8 @@ class SimApp:
             self._update_combobox(child)
 
     def _on_sched_change(self):
+        if self._running:
+            self._toggle_run()
         if self._env is None:
             return
         skey = self._sched_var.get()
@@ -437,8 +473,9 @@ class SimApp:
             self._step = 0
             self._state, _ = self._env.reset()
             self._scheduler.reset()
-            self._ue_angles = np.random.uniform(0, 2*np.pi, self._env.n_ue)
-            # refresh topology bounds (cell radius doesn't change mid-run)
+            if not self._env.mobility:
+                self._ue_angles = np.random.uniform(0, 2*np.pi, self._env.n_ue)
+            # mobility on: keep angles stable, only distances drift
 
         self._update_plots()
         self._update_labels()
@@ -466,11 +503,19 @@ class SimApp:
         # Topology
         x = dists * np.cos(angles)
         y = dists * np.sin(angles)
-        self._topo_sc.set_offsets(np.c_[x, y])
-        self._topo_sc.set_array(snrs)
+        self._topo_sc.set_offsets(np.c_[x, y])   # circles keep fixed UE colors
         segs = [[(0.0, 0.0), (float(x[i]), float(y[i]))] for i in range(n_ue)]
         self._topo_lines.set_segments(segs)
-        self._topo_lines.set_colors(self._uc)
+
+        # Lines colored by SNR (RdYlGn); glow UEs that received RBs this step
+        rb_counts = np.bincount(self._last_action, minlength=n_ue)
+        snr_norm  = np.clip(snrs / 30.0, 0.0, 1.0)
+        rdylgn    = cm.get_cmap('RdYlGn')
+        lcolors   = np.array([rdylgn(float(snr_norm[i])) for i in range(n_ue)])
+        lcolors[:, 3] = np.where(rb_counts > 0, 0.95, 0.30)   # alpha: glow vs dim
+        self._topo_lines.set_colors(lcolors)
+        self._topo_lines.set_linewidths(np.where(rb_counts > 0, 3.5, 1.2))
+
         for i, t in enumerate(self._topo_txts):
             offset = dists[i] * 0.07
             t.set_position((x[i], y[i] + offset))
@@ -479,25 +524,22 @@ class SimApp:
         for bar, v in zip(self._snr_bars, snrs):
             bar.set_width(float(v))
 
-        # Throughput bars
-        max_tp = max(float(tps.max()), 0.5)
+        # Throughput bars — y-limit fixed at 5 Mbps in _init_plots
         for bar, v in zip(self._tp_bars, tps):
             bar.set_height(float(v))
-        self._ax_tp.set_ylim(0, max_tp * 1.3)
 
-        # RB heatmap
-        self._rb_im.set_data(self._last_action[np.newaxis, :].astype(float))
+        # RB heatmap — scrolling buffer
+        self._rb_history = np.roll(self._rb_history, -1, axis=0)
+        self._rb_history[-1] = self._last_action
+        self._rb_im.set_data(self._rb_history)
 
         # History
         hist_r = self._reward_hist[-HIST_LEN:]
         hist_f = self._fair_hist[-HIST_LEN:]
         xs = np.arange(len(hist_r))
         self._rew_line.set_data(xs, hist_r)
-        self._fair_line.set_data(xs, [v * 20 for v in hist_f])
+        self._fair_line.set_data(xs, hist_f)
         self._ax_hist.set_xlim(0, max(HIST_LEN, len(xs)))
-        if hist_r:
-            top = max(float(np.max(hist_r)) * 1.25, 5.0)
-            self._ax_hist.set_ylim(0, top)
 
         self._canvas.draw_idle()
 

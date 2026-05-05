@@ -50,8 +50,9 @@ class RoundRobinScheduler(_BaseScheduler):
 
 class ProportionalFairScheduler(_BaseScheduler):
     """
-    Priority = instant_rate / avg_rate.
-    Assigns all RBs to the highest-priority UE; updates its EMA rate.
+    Per-RB Proportional Fair: each RB independently picks
+    argmax(instant_rate / avg_rate); the chosen UE's avg_rate is
+    EMA-updated before the next RB is allocated within the same step.
     Lazy-initialised on first allocate call to avoid scale mismatch (bps vs. 1.0).
     """
 
@@ -65,15 +66,17 @@ class ProportionalFairScheduler(_BaseScheduler):
         instant = capacity_bps(snrs)                      # (N_UE,) bps
         if self._avg_rates is None:
             self._avg_rates = instant.mean() * np.ones(self.n_ue, dtype=np.float64)
-        priority = instant / (self._avg_rates + 1e-9)
-        best = int(np.argmax(priority))
 
-        # Update EMA for chosen UE
-        self._avg_rates[best] = (
-            (1.0 - self._alpha) * self._avg_rates[best]
-            + self._alpha * instant[best]
-        )
-        return np.full(self.n_rb, best, dtype=int)
+        action = np.empty(self.n_rb, dtype=int)
+        for rb in range(self.n_rb):
+            priority = instant / (self._avg_rates + 1e-9)
+            chosen = int(np.argmax(priority))
+            action[rb] = chosen
+            self._avg_rates[chosen] = (
+                (1.0 - self._alpha) * self._avg_rates[chosen]
+                + self._alpha * instant[chosen]
+            )
+        return action
 
     def reset(self):
         self._avg_rates = None
