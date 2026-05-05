@@ -115,8 +115,7 @@ C     = B · log₂(1 + SNR_linear)        [bps per RB]
 | Control | Description |
 |---|---|
 | Scenario | Switch between A/B/C/D |
-| Scheduler | Random / Round Robin / Proportional Fair |
-| Mobility | Enable ±10 m random walk per episode |
+| Scheduler | Random / Round Robin / Proportional Fair / DQN |
 | Step | Advance one step |
 | Run / Pause | Start/stop auto-run |
 | Speed slider | 20–800 ms per step |

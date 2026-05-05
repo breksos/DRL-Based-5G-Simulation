@@ -124,13 +124,6 @@ class SimApp:
         cb2.pack(padx=10, pady=(2, 8))
         self._sched_var.trace_add('write', lambda *_: self._on_sched_change())
 
-        # Mobility toggle
-        self._mobility_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(f, text="Mobility (±10 m walk)", variable=self._mobility_var,
-                       bg=PANEL_BG, fg=FG, selectcolor=PANEL_BG,
-                       activebackground=PANEL_BG, activeforeground=FG,
-                       command=self._on_mobility_toggle).pack(anchor='w', padx=10, pady=2)
-
         sep()
 
         # Buttons — two rows so each button is wide enough to read
@@ -146,9 +139,7 @@ class SimApp:
         btn_row1 = tk.Frame(f, bg=PANEL_BG)
         btn_row1.pack(padx=8, pady=(4, 2), fill=tk.X)
         ttk.Button(btn_row1, text="↺ Reset", style='Dark.TButton',
-                   command=self._reset_env).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        ttk.Button(btn_row1, text="⟳ Refresh", style='Dark.TButton',
-                   command=self._refresh_scenarios).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+                   command=self._reset_env).pack(padx=2, expand=True, fill=tk.X)
 
         btn_row2 = tk.Frame(f, bg=PANEL_BG)
         btn_row2.pack(padx=8, pady=(2, 4), fill=tk.X)
@@ -370,7 +361,6 @@ class SimApp:
 
         key  = self._scen_var.get()  if hasattr(self, '_scen_var')  else list(SCENARIO_OPTS)[0]
         skey = self._sched_var.get() if hasattr(self, '_sched_var') else 'Round Robin'
-        mob  = self._mobility_var.get() if hasattr(self, '_mobility_var') else False
 
         cfg = load_config(Path('configs') / f'{SCENARIO_OPTS[key]}.yaml')
 
@@ -380,7 +370,6 @@ class SimApp:
             alpha=cfg.alpha, beta=cfg.beta,
             max_steps=cfg.max_steps, seed=None
         )
-        self._env.mobility = mob
 
         sched_cls = SCHED_OPTS.get(skey, RoundRobinScheduler)
         scenario_key = SCENARIO_OPTS[key][-1]  # 'scenario_a' → 'a'
@@ -416,23 +405,6 @@ class SimApp:
         if hasattr(self, '_run_btn'):
             self._run_btn.config(text="▶ Run")
 
-    def _refresh_scenarios(self):
-        """Yeni YAML eklendikten sonra senaryo listesini yeniler."""
-        global SCENARIO_OPTS
-        SCENARIO_OPTS = _discover_scenarios()
-        self._scen_var.set(list(SCENARIO_OPTS)[0])
-        # Combobox değerlerini güncelle
-        for widget in self.root.winfo_children():
-            self._update_combobox(widget)
-        self._reset_env()
-
-    def _update_combobox(self, widget):
-        if isinstance(widget, ttk.Combobox):
-            if self._scen_var in (widget.cget('textvariable'),):
-                widget.config(values=list(SCENARIO_OPTS))
-        for child in widget.winfo_children():
-            self._update_combobox(child)
-
     def _on_sched_change(self):
         if self._running:
             self._toggle_run()
@@ -447,10 +419,6 @@ class SimApp:
         else:
             self._scheduler = cls(self._env.n_ue, self._env.n_rb)
             self.root.title("5G Network Simulation  ·  DRL Project")
-
-    def _on_mobility_toggle(self):
-        if self._env is not None:
-            self._env.mobility = self._mobility_var.get()
 
     # ── simulation loop ────────────────────────────────────────────────────
     def _do_step(self):
@@ -473,9 +441,7 @@ class SimApp:
             self._step = 0
             self._state, _ = self._env.reset()
             self._scheduler.reset()
-            if not self._env.mobility:
-                self._ue_angles = np.random.uniform(0, 2*np.pi, self._env.n_ue)
-            # mobility on: keep angles stable, only distances drift
+            self._ue_angles = np.random.uniform(0, 2*np.pi, self._env.n_ue)
 
         self._update_plots()
         self._update_labels()

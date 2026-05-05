@@ -16,7 +16,6 @@ The window has a **left control panel** and a **right plot area** (5 live plots)
 |---|---|
 | **Scenario** dropdown | A (10 UE / 50 RB), B (15/75), C (20/100), D (20/50, scarce). Switching rebuilds the environment and reloads the matching DQN model. |
 | **Scheduler** dropdown | Random, Round Robin, Proportional Fair, **DQN Agent**. DQN auto-loads `results/models/scenario_<x>/model_final.pth`. |
-| **Mobility** checkbox | When ON, UE positions drift ±10 m at each episode reset (random walk). |
 | **Reset Env** | Resamples UE positions, zeroes throughput history, episode counter +1. |
 | **Step** | Advances exactly one time step (1 ms). |
 | **▶ Run / ⏸ Pause** | Toggles continuous stepping. |
@@ -36,7 +35,7 @@ The window has a **left control panel** and a **right plot area** (5 live plots)
 
 ### 1. Network Topology
 - gNB at center (★), UEs as dots, colored by SNR (red = weak, green = strong).
-- **Look for:** green dots clustered near center, red near the cell edge. Mobility ON → dot positions shift slightly between episodes.
+- **Look for:** green dots clustered near center, red near the cell edge. Positions resample each episode.
 
 ### 2. SNR per UE (bar chart)
 - One bar per UE, height = current SNR in dB.
@@ -69,10 +68,9 @@ The window has a **left control panel** and a **right plot area** (5 live plots)
 
 1. Launch GUI.
 2. Pick **Scenario A**, Scheduler **Round Robin** → Run for ~50 steps. Note baseline numbers.
-3. Switch to **Proportional Fair** → notice fairness collapse, throughput similar.
-4. Switch to **DQN Agent** → reward should be visibly higher than both baselines.
-5. Toggle **Mobility ON**, hit **Reset Env**, watch topology dots shift each episode.
-6. Try **Scenario D** (scarce RBs) — the trade-off becomes the sharpest; DQN's advantage should be clearest here on the combined reward.
+3. Switch to **Proportional Fair** → throughput jumps (PF concentrates RBs), fairness drops.
+4. Switch to **DQN Agent** → reward sits between Random and RR; this is the honest negative-result behaviour described in `docs/FINAL.md`.
+5. Try **Scenario D** (scarce RBs) — the throughput/fairness trade-off is sharpest here; PF wins on combined reward, DQN ranks last.
 
 ---
 
