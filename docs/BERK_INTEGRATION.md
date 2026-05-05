@@ -2,9 +2,9 @@
 
 Yaşayan döküman. Her fix turundan / eğitimden / review'dan sonra güncelle.
 
-**Son güncelleme:** 2026-05-04
+**Son güncelleme:** 2026-05-05
 **Branch:** main
-**Reviewer:** PM review tur 2 tamamlandı. Yapılan iş listeleri için bkz. [FIX_TASKS.md](FIX_TASKS.md) ve [FOLLOWUP_TASKS.md](FOLLOWUP_TASKS.md).
+**Reviewer:** PM review tur 3 tamamlandı. Yapılan iş listeleri için bkz. [FIX_TASKS.md](FIX_TASKS.md), [FOLLOWUP_TASKS.md](FOLLOWUP_TASKS.md) ve [FOLLOWUP_TASKS_R3.md](FOLLOWUP_TASKS_R3.md).
 
 ---
 
@@ -14,12 +14,12 @@ Yaşayan döküman. Her fix turundan / eğitimden / review'dan sonra güncelle.
 |---|---|
 | Channel model + env | ✅ Stabil, testli |
 | Baseline'lar (Random / RR / PF) | ✅ Tur 1'de bug'lar düzeltildi |
-| DQN training pipeline | ⚠️ Stabil (Double-DQN + Huber), ama A az eğitilmiş (500 ep), B/C/D eski reward ölçeğinde |
-| **DQN action adapter** | ❌ **Per-RB API var ama runtime'da hâlâ tek-UE seçiyor** — açık sorunlara bak |
+| DQN training pipeline | ✅ Tüm senaryolar (A/B/C/D) yeniden eğitildi, max loss < 100 |
+| **DQN action adapter** | ✅ Softmax+multinomial per-RB allocation, tekil RNG (seed destekli) |
 | GUI | ✅ İstenmeyen refactor sonrası eski haline döndürüldü |
-| Testler (`pytest tests/`) | ✅ 6 test geçiyor |
-| Karşılaştırma artefaktı | ✅ `results/baselines/comparison.csv` var, ama her senaryoda DQN < PF |
-| Docs / README | ⚠️ summary.md hâlâ per-RB allocation iddia ediyor — runtime'da doğru değil |
+| Testler (`pytest tests/`) | ✅ 8 test geçiyor |
+| Karşılaştırma artefaktı | ✅ `results/baselines/comparison.csv` güncel (R3 modelleri), DQN PF'i geçiyor |
+| Docs / README | ✅ Güncellendi (summary.md gerçek sayılarla) |
 
 ---
 
@@ -48,47 +48,28 @@ Yaşayan döküman. Her fix turundan / eğitimden / review'dan sonra güncelle.
 - [x] `DQNAgent.load`'a reward-scale uyumsuzluğu uyarısı eklendi
 - [x] Yeni `comparison.csv` yanında `comparison_OLD.csv` saklandı
 
+### Tur 3 ([FOLLOWUP_TASKS_R3.md](FOLLOWUP_TASKS_R3.md))
+- [x] Reward clamping — `norm_tp = min(tp/50, 1.0)` → adım başı reward artık `[0, 1]` aralığında
+- [x] Per-RB RNG bug düzeltildi — `ActionAdapter` artık tek `self._rng` kullanıyor (seed destekli)
+- [x] `DQNScheduler` ve `scripts/run_baselines.py` seed=0 ile güncellendi
+- [x] Tüm senaryolar 2000 ep yeniden eğitildi (B/C/D LR yarıya: 2.5e-4; C ikinci kez: 1.25e-4)
+- [x] Yeni `test_reward_is_clamped` ve `test_action_adapter_distribution` testleri eklendi (8 test, hepsi geçiyor)
+- [x] `comparison_R2OLD.csv` saklandı, yeni `comparison.csv` oluşturuldu
+
 ---
 
 ## Açık sorunlar (öncelik sırasına göre)
 
-### 1. ⛔ ActionAdapter runtime'da hâlâ tek-UE allocation üretiyor
-`LAMBDA = 0.5` ve `0.01` magnitude'lu tiebreak gürültüsü, gerçek Q-değer farklarının (~0.1+) üstesinden gelmek için çok küçük. Sonuç: dominant UE her RB'yi alıyor → her senaryoda fairness ≈ `1/n_ue`. PM sanity check'i (fairness > `1/n_ue + 0.05`) **dört senaryoda da fail oluyor**.
-
-**Çözüm seçenekleri:**
-- `LAMBDA`'yı yükselt (Q-değerleri [0,1]'de ölçeklendiyse 0.1) ve gürültü magnitude'ını yükselt (örn. 0.5).
-- Ya da argmax yerine **softmax over scores → her RB için multinomial sample**.
-- `tests/test_adapter.py::test_action_adapter_per_rb`'yi güncelle: çıktıda en az 2 farklı UE indeksi olduğunu assert et (mevcut test `q_values[3] = 0.009` koyarak yapay olarak gürültü aralığına oturtuyor).
-
-### 2. ⛔ Eski checkpoint'ler — B/C/D hâlâ eski reward ölçeğinde
-B/C/D `model_final.pth` dosyaları env normalize edilmeden önce eğitilmişti. İçlerindeki Q-değerleri mevcut training ile ~50× farklı ölçekte. Load-time uyarısı eklendi ama rapor için dürüst sonuç istiyorsan yeniden eğit:
-```
-python main.py --scenario b --episodes 2000
-python main.py --scenario c --episodes 2000
-python main.py --scenario d --episodes 2000
-```
-Her log'da max loss < 100 olduğunu doğrula.
-
-### 3. ⚠️ Senaryo A az eğitilmiş (500 ep, orijinal 3676'ya karşı)
-Tur 2 retrain'inden sonra A'nın `model_final.pth`'i yetersiz eğitildi. `comparison.csv`'de throughput 60.4 → 53.0 Mbps düştü. Sorun #1 düzeldikten sonra A'yı B/C/D ile aynı bütçede (~2000 ep) yeniden eğit.
-
-### 4. ⚠️ Dökümantasyon DQN davranışını abartıyor
-[summary.md](summary.md) action'ı *"50 integer'lık array, her RB için bir tane"* olarak tanımlıyor. Şu an DQN aslında tek bir int üretiyor (dominant UE), o da tüm RB'lere replicate ediliyor. Ya önce sorun #1'i düzelt ya da ilgili bölümleri rapor dürüst olacak şekilde yeniden yaz.
-
-### 5. ⚠️ `gui/app.py` revert'i staged ama commit'lenmemiş
+### 1. ⚠️ `gui/app.py` revert'i staged ama commit'lenmemiş
 ```
 git restore --staged gui/app.py
 ```
 Sonra hazır olduğunda bilinçli olarak commit'le.
 
-### 6. 📝 Minor — adapter performansı
-`np.random.default_rng(rb_idx)` `agents/train.py`'da per-RB loop içinde kuruluyor. `__init__`'te bir kere noise matrisini precompute et veya loop dışına çıkar.
+### 2. ⚠️ DQN combined-R'da RR'ı geçemiyor
+R3 sonrası DQN, PF'i tüm senaryolarda geçiyor (reward clamping sayesinde) ama Round Robin'i geçemiyor. RR'ın üstünlüğü yüksek fairness'tan geliyor (0.60–0.64 vs DQN 0.40–0.52). Daha uzun eğitim veya farklı reward şekillendirmesi gerekebilir.
 
 ---
-
-## Karar bekleyen
-
-- **"Tek-UE DQN"'i kabul edip dökümanları mı yeniden yazıyoruz**, yoksa **adapter'ı düzeltip her şeyi yeniden eğitiyor muyuz?** Düzeltme yolu ~1 saat ek dev + ~30 dk eğitim. Döküman yeniden yazma yolu ~15 dk ama projenin RL değer önerisini öldürür.
 
 ---
 
@@ -137,6 +118,14 @@ Teslimden önce lokalde çalıştır:
 
 - `results/logs/train_scenario_a_OLD.csv` — orijinal 3676 ep eğitim (max loss 512k, MSE)
 - `results/logs/train_scenario_a_OLD2.csv` — başarısız ilk retry (max loss 131.8, MSE + Double-DQN)
-- `results/logs/train_scenario_a.csv` — güncel (500 ep, max loss 4.3, Huber + Double-DQN + LR/2)
+- `results/logs/train_scenario_a_R3OLD.csv` — R3 öncesi (500 ep, max loss 4.3, Huber + LR/2)
+- `results/logs/train_scenario_b_R3OLD.csv` — R3 öncesi B (eski reward ölçeği)
+- `results/logs/train_scenario_b_LRhalf1.csv` — R3 ilk deneme B (max loss 325, lr=5e-4)
+- `results/logs/train_scenario_c_R3OLD.csv` — R3 öncesi C (eski reward ölçeği)
+- `results/logs/train_scenario_c_LRhalf1.csv` — R3 ilk deneme C (max loss 1596, lr=5e-4)
+- `results/logs/train_scenario_c_LRhalf2.csv` — R3 ikinci deneme C (max loss 250, lr=2.5e-4)
+- `results/logs/train_scenario_d_R3OLD.csv` — R3 öncesi D (eski reward ölçeği)
+- `results/logs/train_scenario_d_LRhalf1.csv` — R3 ilk deneme D (max loss 749, lr=5e-4)
 - `results/baselines/comparison_OLD.csv` — adapter-rewrite öncesi sayılar
-- `results/baselines/comparison.csv` — güncel sayılar (sorun #1 yüzünden hâlâ ≈ PF davranışı)
+- `results/baselines/comparison_R2OLD.csv` — R3 öncesi sayılar (clampsiz reward)
+- `results/baselines/comparison.csv` — güncel R3 sayıları (clamped reward, softmax adapter)

@@ -20,14 +20,15 @@ except ImportError:
 # This spreads RBs across UEs in proportion to learned priorities × channel
 # quality, regardless of the absolute Q-value scale.
 
-LAMBDA = 0.5
+LAMBDA = 0.1
 
 
 class ActionAdapter:
-    def __init__(self, n_ue: int, n_rb: int):
+    def __init__(self, n_ue: int, n_rb: int, seed=None):
         self.n_ue = n_ue
         self.n_rb = n_rb
         self.action_dim = n_ue
+        self._rng = np.random.default_rng(seed)
 
     def to_allocation(self, snrs: np.ndarray, q_values: np.ndarray) -> np.ndarray:
         """Per-RB allocation via softmax-weighted multinomial sampling.
@@ -40,10 +41,7 @@ class ActionAdapter:
         scores = scores - scores.max()          # numerically stable softmax
         probs = np.exp(scores)
         probs = probs / probs.sum()
-        allocation = np.empty(self.n_rb, dtype=np.int64)
-        for rb_idx in range(self.n_rb):
-            allocation[rb_idx] = int(np.random.default_rng(rb_idx).choice(self.n_ue, p=probs))
-        return allocation
+        return self._rng.choice(self.n_ue, size=self.n_rb, p=probs).astype(np.int64)
 
 
 # ---------------------------------------------------------------------------

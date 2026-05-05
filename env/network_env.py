@@ -120,6 +120,6 @@ class FiveGEnv(gym.Env):
     def _compute_reward(self, throughputs: np.ndarray) -> float:
         # Normalise to [0,~1] so Q-values stay in a tractable range.
         # info["throughput_total"] is kept in bps for evaluation metrics.
-        norm_tp = throughputs.sum() / 1e6 / THROUGHPUT_NORM_MBPS
+        norm_tp = min(throughputs.sum() / 1e6 / THROUGHPUT_NORM_MBPS, 1.0)
         fairness = self._jains_index(throughputs)
         return self.alpha * norm_tp + self.beta * fairness

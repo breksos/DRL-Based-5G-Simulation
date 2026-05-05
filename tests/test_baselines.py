@@ -44,3 +44,12 @@ def test_evaluate_scheduler_finite():
     result = evaluate_scheduler(env, sched, n_episodes=2)
     assert np.isfinite(result["avg_throughput_mbps"])
     assert np.isfinite(result["avg_fairness"])
+
+
+def test_reward_is_clamped():
+    env = FiveGEnv(n_ue=10, n_rb=50, seed=0)
+    env.reset()
+    action = np.zeros(50, dtype=int)
+    _, reward, _, _, _ = env.step(action)
+    assert reward <= 1.0, f"reward {reward} exceeds 1.0 — norm_tp not clamped"
+    env.close()

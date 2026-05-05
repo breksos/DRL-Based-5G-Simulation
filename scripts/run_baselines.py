@@ -52,7 +52,7 @@ def main():
                 ("Random",          RandomScheduler(n_ue=n_ue, n_rb=n_rb, seed=0)),
                 ("RoundRobin",      RoundRobinScheduler(n_ue=n_ue, n_rb=n_rb)),
                 ("ProportionalFair",ProportionalFairScheduler(n_ue=n_ue, n_rb=n_rb)),
-                ("DQN",             DQNScheduler(n_ue=n_ue, n_rb=n_rb, scenario=scenario)),
+                ("DQN",             DQNScheduler(n_ue=n_ue, n_rb=n_rb, scenario=scenario, seed=0)),
             ]
 
             for sched_name, sched in schedulers:

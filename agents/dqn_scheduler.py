@@ -27,10 +27,10 @@ class DQNScheduler:
     """
 
     def __init__(self, n_ue: int, n_rb: int,
-                 model_path: str = None, scenario: str = "a"):
+                 model_path: str = None, scenario: str = "a", seed=None):
         self.n_ue = n_ue
         self.n_rb = n_rb
-        self._adapter = ActionAdapter(n_ue=n_ue, n_rb=n_rb)
+        self._adapter = ActionAdapter(n_ue=n_ue, n_rb=n_rb, seed=seed)
         state_dim = 2 * n_ue + n_rb
 
         self._agent = DQNAgent(state_dim=state_dim, action_dim=self._adapter.action_dim)

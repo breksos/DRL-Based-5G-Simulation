@@ -133,10 +133,7 @@ class SimApp:
 
         sep()
 
-        # Buttons
-        btn_f = tk.Frame(f, bg=PANEL_BG)
-        btn_f.pack(padx=8, pady=4, fill=tk.X)
-
+        # Buttons — two rows so each button is wide enough to read
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('Dark.TButton', background='#313244', foreground=FG,
@@ -146,13 +143,18 @@ class SimApp:
                          borderwidth=0, padding=4)
         style.map('Run.TButton', background=[('active', '#2a9d59')])
 
-        ttk.Button(btn_f, text="↺ Reset", style='Dark.TButton',
+        btn_row1 = tk.Frame(f, bg=PANEL_BG)
+        btn_row1.pack(padx=8, pady=(4, 2), fill=tk.X)
+        ttk.Button(btn_row1, text="↺ Reset", style='Dark.TButton',
                    command=self._reset_env).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        ttk.Button(btn_f, text="⟳ Refresh", style='Dark.TButton',
+        ttk.Button(btn_row1, text="⟳ Refresh", style='Dark.TButton',
                    command=self._refresh_scenarios).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        ttk.Button(btn_f, text="→ Step", style='Dark.TButton',
+
+        btn_row2 = tk.Frame(f, bg=PANEL_BG)
+        btn_row2.pack(padx=8, pady=(2, 4), fill=tk.X)
+        ttk.Button(btn_row2, text="→ Step", style='Dark.TButton',
                    command=self._do_step).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
-        self._run_btn = ttk.Button(btn_f, text="▶ Run", style='Run.TButton',
+        self._run_btn = ttk.Button(btn_row2, text="▶ Run", style='Run.TButton',
                                    command=self._toggle_run)
         self._run_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
 
