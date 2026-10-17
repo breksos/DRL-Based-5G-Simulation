@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this simulator, please cite it as below."
+title: "drl5g: Deep reinforcement learning for 5G downlink resource-block scheduling"
+version: 2.0.0
+date-released: 2026-10-17
+license: MIT
+repository-code: "https://github.com/breksos/DRL-Based-5G-Simulation"
+authors:
+  - given-names: İsmail
+    family-names: Kabak
+  - given-names: Berk Hakan
+    family-names: Öge
+  - given-names: Emre Can
+    family-names: Tuncer
+keywords:
+  - 5G
+  - reinforcement learning
+  - DQN
+  - radio resource management
+  - scheduling
