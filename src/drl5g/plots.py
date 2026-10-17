@@ -16,7 +16,7 @@ TEXT = "#0b0b0b"
 TEXT_MUTED = "#52514e"
 GRID = "#e4e3df"
 HIGHLIGHT = "#2a78d6"  # the DQN, the series every figure is about
-CONTEXT = "#9a9993"  # baselines: identified by direct labels, not by colour
+CONTEXT = "#9a9993"  # baselines in the dot plot, identified by their axis labels
 REFERENCE = "#eb6834"
 
 SCHEDULER_ORDER = ("DQN", "Greedy", "PropFair", "RoundRobin", "Random", "MaxRate")
@@ -75,15 +75,37 @@ def _save(fig: plt.Figure, path: Path) -> Path:
     return path
 
 
+# Max C/I leaves 90 %+ of the users unserved, so its objective is around −0.4;
+# drawing it would squash the differences that matter into a sliver.
+OMITTED = ("MaxRate",)
+OMITTED_NOTE = (
+    "Max C/I is not shown: it leaves 90–95 % of users unserved (R ≈ −0.42). "
+    "See results/evaluation/summary.csv."
+)
+
+# Scatter identity: palette colour plus marker shape, so overlapping points stay legible.
+SCATTER_STYLE = {
+    "DQN": {"color": HIGHLIGHT, "marker": "o", "s": 70},
+    "Greedy": {"color": "#eb6834", "marker": "D", "s": 42},
+    "PropFair": {"facecolors": "none", "edgecolors": "#1baf7a", "marker": "o", "s": 150},
+    "RoundRobin": {"color": "#eda100", "marker": "s", "s": 36},
+    "Random": {"color": "#e87ba4", "marker": "v", "s": 46},
+}
+
+
+def _plotted(rows: dict[str, dict[str, str]]) -> list[str]:
+    return [n for n in SCHEDULER_ORDER if n in rows and n not in OMITTED]
+
+
 def objective_dotplot(summary_csv: Path, out: Path, titles: dict[str, str]) -> Path:
     """Mean per-TTI objective with 95 % CI, one panel per scenario."""
     _style()
     scenarios = _by_scenario(_read_csv(summary_csv))
-    fig, axes = plt.subplots(1, len(scenarios), figsize=(3.0 * len(scenarios), 3.0), sharey=True)
+    fig, axes = plt.subplots(1, len(scenarios), figsize=(3.0 * len(scenarios), 2.9), sharey=True)
     axes = np.atleast_1d(axes)
 
     for ax, (scenario, rows) in zip(axes, scenarios.items(), strict=True):
-        names = [n for n in SCHEDULER_ORDER if n in rows][::-1]
+        names = _plotted(rows)[::-1]
         y = np.arange(len(names))
         means = np.array([float(rows[n]["reward"]) for n in names])
         cis = np.array([float(rows[n]["reward_ci95"]) for n in names])
@@ -95,6 +117,8 @@ def objective_dotplot(summary_csv: Path, out: Path, titles: dict[str, str]) -> P
         ax.set_xlabel("Objective R (mean per TTI)")
         ax.grid(axis="y", visible=False)
         ax.tick_params(axis="y", length=0)
+        ax.margins(x=0.12)
+    fig.text(0.01, -0.04, OMITTED_NOTE, fontsize=7.5, color=TEXT_MUTED)
     fig.tight_layout()
     return _save(fig, out)
 
@@ -103,38 +127,36 @@ def tradeoff_scatter(summary_csv: Path, out: Path, titles: dict[str, str]) -> Pa
     """Throughput vs fairness per scheduler: where each one sits on the trade-off."""
     _style()
     scenarios = _by_scenario(_read_csv(summary_csv))
-    fig, axes = plt.subplots(1, len(scenarios), figsize=(3.2 * len(scenarios), 3.2), sharey=True)
+    fig, axes = plt.subplots(1, len(scenarios), figsize=(3.2 * len(scenarios), 3.3))
     axes = np.atleast_1d(axes)
 
     for ax, (scenario, rows) in zip(axes, scenarios.items(), strict=True):
-        for name in SCHEDULER_ORDER:
-            if name not in rows:
-                continue
-            x, y = float(rows[name]["throughput_mbps"]), float(rows[name]["fairness"])
-            is_dqn = name == "DQN"
+        for name in reversed(_plotted(rows)):  # DQN drawn last, on top
+            style = {"edgecolors": SURFACE, "linewidths": 1.2, **SCATTER_STYLE[name]}
+            if "facecolors" in SCATTER_STYLE[name]:
+                style["linewidths"] = 1.8
             ax.scatter(
-                x,
-                y,
-                s=60 if is_dqn else 40,
-                c=HIGHLIGHT if is_dqn else CONTEXT,
-                edgecolors=SURFACE,
-                linewidths=1.5,
-                zorder=3,
-            )
-            ax.annotate(
-                LABELS[name],
-                (x, y),
-                xytext=(6, 4),
-                textcoords="offset points",
-                fontsize=7.5,
-                color=TEXT if is_dqn else TEXT_MUTED,
-                fontweight="bold" if is_dqn else "normal",
+                float(rows[name]["throughput_mbps"]),
+                float(rows[name]["fairness"]),
+                label=LABELS[name],
+                zorder=4 if name == "DQN" else 3,
+                **style,
             )
         ax.set_title(titles.get(scenario, scenario.upper()), loc="left")
         ax.set_xlabel("Cell throughput (Mbit/s)")
-        ax.set_ylim(0, 1.05)
-        ax.margins(x=0.25)
+        ax.margins(x=0.25, y=0.25)
     axes[0].set_ylabel("Jain fairness (per TTI)")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles[::-1],
+        labels[::-1],
+        loc="upper center",
+        ncol=len(labels),
+        frameon=False,
+        bbox_to_anchor=(0.5, 1.08),
+        fontsize=8.5,
+    )
+    fig.text(0.01, -0.04, OMITTED_NOTE, fontsize=7.5, color=TEXT_MUTED)
     fig.tight_layout()
     return _save(fig, out)
 
@@ -161,7 +183,11 @@ def training_curves(
         values = [float(r["validation_objective"]) for r in rows]
         ax.plot(episodes, values, color=HIGHLIGHT, linewidth=2, solid_capstyle="round")
 
-        for name, color in (("RoundRobin", CONTEXT), ("Greedy", REFERENCE)):
+        # Greedy sits above round robin, so label it above its line and RR below.
+        for name, color, offset, va in (
+            ("RoundRobin", CONTEXT, -3, "top"),
+            ("Greedy", REFERENCE, 3, "bottom"),
+        ):
             if name in scenarios.get(scenario, {}):
                 level = float(scenarios[scenario][name]["reward"])
                 ax.axhline(level, color=color, linewidth=1.2, linestyle=(0, (4, 3)))
@@ -169,9 +195,10 @@ def training_curves(
                     LABELS[name],
                     (1.0, level),
                     xycoords=("axes fraction", "data"),
-                    xytext=(-2, 3),
+                    xytext=(-2, offset),
                     textcoords="offset points",
                     ha="right",
+                    va=va,
                     fontsize=7,
                     color=TEXT_MUTED,
                 )

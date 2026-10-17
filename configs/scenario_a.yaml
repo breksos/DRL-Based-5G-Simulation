@@ -25,6 +25,7 @@ dqn:
   epsilon_end: 0.02
   epsilon_decay_fraction: 0.6
   grad_clip_norm: 10.0
+  final_lr_fraction: 0.05      # learning rate decays linearly to 5 % of lr
 
 train:
   episodes: 5000

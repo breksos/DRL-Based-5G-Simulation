@@ -263,7 +263,7 @@ class SimulationApp:
     def _init_plots(self) -> None:
         """(Re)build all axes; called on reset and whenever UEs are re-dropped."""
         env = self._env
-        n_ue, n_rb, radius = env.n_ue, env.n_rb, env.config.cell_radius
+        n_ue, radius = env.n_ue, env.config.cell_radius
         self._fig.clear()
         self._ue_colors = [colormaps["tab20"](i % 20 / 20) for i in range(n_ue)]
         grid = GridSpec(
@@ -284,7 +284,7 @@ class SimulationApp:
         theta = np.linspace(0, 2 * np.pi, 300)
         ax.plot(radius * np.cos(theta), radius * np.sin(theta), "--", color="#585b70", lw=0.9)
         ax.scatter([0], [0], marker="*", s=380, c=ACCENT, zorder=5)
-        ax.text(0, radius * 0.04, "gNB", color=ACCENT, ha="center", fontsize=7.5, fontweight="bold")
+        ax.text(0, radius * 0.09, "gNB", color=ACCENT, ha="center", fontsize=7.5, fontweight="bold")
         ax.set_xlim(-radius * 1.12, radius * 1.12)
         ax.set_ylim(-radius * 1.12, radius * 1.12)
         ax.set_aspect("equal")
@@ -329,7 +329,6 @@ class SimulationApp:
         )
         ax.set_xticks(range(n_ue), [f"U{i}" for i in range(n_ue)], fontsize=6.2)
         ax.set_ylabel("Mbit/s", fontsize=8)
-        ax.set_ylim(0, n_rb * env.rb_capacity_bps.max() / 1e6 * 1.05)
 
         # RB allocation of the last few TTIs.
         ax = self._fig.add_subplot(grid[2, 0:2])
@@ -375,8 +374,10 @@ class SimulationApp:
         self._links.set_colors(colors)
         self._links.set_linewidths(np.where(served, 3.5, 1.2))
 
-        for bar, value in zip(self._throughput_bars, env.last_throughput_bps / 1e6, strict=True):
+        throughput_mbps = env.last_throughput_bps / 1e6
+        for bar, value in zip(self._throughput_bars, throughput_mbps, strict=True):
             bar.set_height(value)
+        self._ax_throughput.set_ylim(0, max(throughput_mbps.max() * 1.15, 0.5))
         self._rb_image.set_data(self._rb_history)
 
         rewards, fairness = state.rewards[-HISTORY_LEN:], state.fairness[-HISTORY_LEN:]

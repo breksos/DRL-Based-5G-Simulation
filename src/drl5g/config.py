@@ -61,6 +61,7 @@ class DQNConfig:
     epsilon_end: float = 0.02
     epsilon_decay_fraction: float = 0.6
     grad_clip_norm: float = 10.0
+    final_lr_fraction: float = 0.05
 
 
 @dataclass(frozen=True)

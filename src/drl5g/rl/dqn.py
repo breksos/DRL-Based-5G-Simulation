@@ -93,7 +93,8 @@ class EpsilonSchedule:
 class DQNAgent:
     """Double DQN: online network picks the next action, target network scores it.
 
-    Uses Huber loss, gradient-norm clipping and hard target updates.
+    Uses Huber loss, gradient-norm clipping, hard target updates and a
+    linearly annealed learning rate.
     """
 
     def __init__(
@@ -115,6 +116,14 @@ class DQNAgent:
         self.target_net.eval()
 
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=config.lr)
+        # Anneal the learning rate so late updates fine-tune rather than jolt a
+        # policy whose Q-values for competing UEs differ only slightly.
+        self.lr_schedule = torch.optim.lr_scheduler.LinearLR(
+            self.optimizer,
+            start_factor=1.0,
+            end_factor=config.final_lr_fraction,
+            total_iters=max(total_steps, 1),
+        )
         self.buffer = ReplayBuffer(config.buffer_size, obs_size, self._rng)
         self.epsilon_schedule = EpsilonSchedule(
             config.epsilon_start,
@@ -160,4 +169,5 @@ class DQNAgent:
         loss.backward()
         nn.utils.clip_grad_norm_(self.q_net.parameters(), self.config.grad_clip_norm)
         self.optimizer.step()
+        self.lr_schedule.step()
         return float(loss.item())

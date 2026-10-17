@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from drl5g import paths
@@ -60,6 +61,8 @@ def cmd_train(args: argparse.Namespace) -> None:
     out = Path(args.out_dir)
     for scenario in _scenario_ids(args.scenarios):
         config = load_scenario(scenario)
+        if args.seed is not None:
+            config = replace(config, train=replace(config.train, seed=args.seed))
         log.info("training scenario %s: %s", scenario, config.description)
         result = train(
             config,
@@ -178,6 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     train = sub.add_parser("train", help="train the DQN scheduler")
     train.add_argument("scenarios", nargs="+", help="scenario ids (e.g. a b) or 'all'")
     train.add_argument("--episodes", type=int, help="override the configured episode count")
+    train.add_argument("--seed", type=int, help="override the configured training seed")
     train.add_argument(
         "--out-dir", default=str(paths.RESULTS_DIR), help="writes models/ and logs/ here"
     )
