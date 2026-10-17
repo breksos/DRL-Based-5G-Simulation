@@ -1,18 +1,32 @@
-# Senaryo A — Baseline (10 UE, 50 RB)
-n_ue: 10
-n_rb: 50
-cell_radius: 500.0
-alpha: 0.5
-beta: 0.5
-lr: 0.00025
-gamma: 0.99
-epsilon_start: 1.0
-epsilon_end: 0.01
-epsilon_decay_steps: 200000
-target_update_freq: 500
-buffer_size: 100000
-batch_size: 64
-hidden_size: 256
-n_episodes: 3676
-max_steps: 200
-checkpoint_every: 100
+# Scenario A: Baseline: 10 UEs share 50 RBs
+name: A
+description: "Baseline: 10 UEs share 50 RBs"
+
+env:
+  n_ue: 10
+  n_rb: 50
+  cell_radius: 500.0          # metres
+  max_steps: 200              # TTIs per episode
+  alpha: 0.5                  # weight of the throughput term
+  beta: 0.5                   # weight of Jain fairness
+  throughput_norm_mbps: 50.0   # cell service target: the throughput term saturates here
+  starvation_penalty: 1.0      # minimum-service QoS: cost of each UE left without an RB
+
+dqn:
+  rbg_size: 2                 # RBs per decision: every TTI takes 25 decisions
+  hidden_sizes: [128, 128]
+  lr: 0.0005
+  gamma: 1.0                  # rewards telescope to the per-TTI objective
+  batch_size: 64
+  buffer_size: 100000
+  learning_starts: 1000
+  target_update_freq: 1000
+  epsilon_start: 1.0
+  epsilon_end: 0.02
+  epsilon_decay_fraction: 0.6
+  grad_clip_norm: 10.0
+  final_lr_fraction: 0.05      # learning rate decays linearly to 5 % of lr
+
+train:
+  episodes: 5000
+  seed: 0

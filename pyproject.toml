@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drl5g"
+version = "2.0.0"
+description = "Single-cell 5G downlink resource-block scheduling simulator with a Double-DQN scheduler, classical baselines and a live GUI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "İsmail Kabak" },
+    { name = "Berk Hakan Öge" },
+    { name = "Emre Can Tuncer" },
+]
+keywords = ["5G", "reinforcement-learning", "dqn", "scheduling", "resource-allocation", "simulation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.0",
+    "gymnasium>=0.29",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5"]
+
+[project.scripts]
+drl5g = "drl5g.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # allow the Greek/maths symbols used in docstrings
+
+[tool.coverage.run]
+source = ["drl5g"]
+omit = ["*/drl5g/gui/*", "*/drl5g/__main__.py"]

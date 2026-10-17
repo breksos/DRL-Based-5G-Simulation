@@ -1,14 +1,33 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
 
-# Trained model weights — checkpoint'ler ignore, sadece final modeller commit'lenir
+# Virtual environments
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Training checkpoints: only the final model of each scenario is versioned
 *.pth
 *.pt
-!**/model_final.pth
+!results/models/*/model_final.pth
 
-# Ortam ve gizli dosyalar
-.claude/
-
-# IDE
+# Scratch output from ad-hoc runs
+runs/
 *.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.claude/
