@@ -1,5 +1,0 @@
-scenario,scheduler,n_ue,n_rb,avg_throughput_mbps,std_throughput_mbps,avg_fairness,std_fairness
-a,RR,10,50,29.8049,7.728,0.6474,0.0892
-a,PF,10,50,73.2141,17.2549,0.1,0.0
-a,Random,10,50,29.4812,7.1896,0.586,0.0681
-a,DQN,10,50,33.6721,9.7612,0.4919,0.1282
