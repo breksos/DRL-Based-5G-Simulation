@@ -1,18 +1,31 @@
-# Senaryo D — Kaynak Kıtlığı (20 UE, 50 RB)
-n_ue: 20
-n_rb: 50
-cell_radius: 500.0
-alpha: 0.5
-beta: 0.5
-lr: 0.00025
-gamma: 0.99
-epsilon_start: 1.0
-epsilon_end: 0.01
-epsilon_decay_steps: 200000
-target_update_freq: 500
-buffer_size: 100000
-batch_size: 64
-hidden_size: 256
-n_episodes: 2000
-max_steps: 200
-checkpoint_every: 100
+# Scenario D: Resource-scarce: 20 UEs share 50 RBs
+name: D
+description: "Resource-scarce: 20 UEs share 50 RBs"
+
+env:
+  n_ue: 20
+  n_rb: 50
+  cell_radius: 500.0          # metres
+  max_steps: 200              # TTIs per episode
+  alpha: 0.5                  # weight of the throughput term
+  beta: 0.5                   # weight of Jain fairness
+  throughput_norm_mbps: 50.0   # cell service target: the throughput term saturates here
+  starvation_penalty: 1.0      # minimum-service QoS: cost of each UE left without an RB
+
+dqn:
+  rbg_size: 2                 # RBs per decision: every TTI takes 25 decisions
+  hidden_sizes: [128, 128]
+  lr: 0.0005
+  gamma: 1.0                  # rewards telescope to the per-TTI objective
+  batch_size: 64
+  buffer_size: 100000
+  learning_starts: 1000
+  target_update_freq: 1000
+  epsilon_start: 1.0
+  epsilon_end: 0.02
+  epsilon_decay_fraction: 0.6
+  grad_clip_norm: 10.0
+
+train:
+  episodes: 5000
+  seed: 0
